@@ -1,1 +1,24 @@
 node -e "require('https').get('https://cdn.playwright.dev', res => console.log('OK:', res.statusCode)).on('error', err => console.error(err))"
+
+
+Hi Team,
+
+I am trying to install Playwright browsers on my client machine, but the download is failing with the following error:
+
+`SELF_SIGNED_CERT_IN_CHAIN`
+
+After investigation, I found that the issue is related to SSL/TLS certificate validation. When Node.js certificate validation is temporarily disabled, the browser download proceeds successfully, which indicates that the network is presenting a certificate that is not trusted by Node.js.
+
+Could you please help with one of the following:
+
+1. Provide the corporate Root CA certificate (PEM/CRT/CER format) used for SSL inspection so that it can be configured for Node.js.
+2. Alternatively, advise if there is a recommended process for Node.js applications to trust the organization's certificates.
+
+The objective is to allow Playwright browser downloads and other Node.js HTTPS requests to work without disabling certificate validation.
+
+Error:
+`SELF_SIGNED_CERT_IN_CHAIN`
+
+Please let me know if you need any additional details.
+
+Thank you.
