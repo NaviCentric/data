@@ -1,0 +1,1 @@
+node -e "require('https').get('https://cdn.playwright.dev', res => console.log('OK:', res.statusCode)).on('error', err => console.error(err))"
