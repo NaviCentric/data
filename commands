@@ -1,2 +1,5 @@
 set NODE_TLS_REJECT_UNAUTHORIZED=0
 npx playwright install
+
+set NODE_USE_SYSTEM_CA=1
+node -e "require('https').get('https://cdn.playwright.dev', r => console.log('Success:', r.statusCode)).on('error', e => console.error(e.code, e.message))"
