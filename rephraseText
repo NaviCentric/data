@@ -5,3 +5,7 @@ args = ["-y", "@upstash/context7-mcp"]
 [mcp_servers.playwright]
 command = "npx"
 args = ["@playwright/mcp@latest"]
+
+
+https://playwright.dev/docs
+https://playwright.dev/docs/pom
