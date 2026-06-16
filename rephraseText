@@ -14,3 +14,8 @@ https://playwright.dev/docs/pom
 [mcp_servers.chrome-devtools]
 command = "npx"
 args = ["-y", "chrome-devtools-mcp@latest"]
+
+
+[agents.page-object-generator]
+description = "Generates Playwright Page Objects"
+config_file = "agents/page-object-generator.toml"
