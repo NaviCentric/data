@@ -19,3 +19,7 @@ args = ["-y", "chrome-devtools-mcp@latest"]
 [agents.page-object-generator]
 description = "Generates Playwright Page Objects"
 config_file = "agents/page-object-generator.toml"
+
+
+
+Codex is being used to analyze a large OpenAPI specification (~68,000 lines) to identify the correct API endpoints required for test automation. Due to the absence of comprehensive documentation or SMEs, manual endpoint discovery is extremely time-consuming. Codex understands the API contracts and maps functional requirements to the appropriate endpoints, significantly improving productivity. The current token limit restricts analysis of such a large specification, so an increased token allocation is required to efficiently complete the project's automation scenarios.
