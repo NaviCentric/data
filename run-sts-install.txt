@@ -1,0 +1,48 @@
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$Version
+)
+
+$TaskPath = "\Jenkins\tasks"
+$TaskName = "stsinstall"
+$PollIntervalSeconds = 2
+$TimeoutSeconds = 600   # adjust to how long the install can reasonably take
+
+$service = New-Object -ComObject "Schedule.Service"
+$service.Connect()
+
+$task = $service.GetFolder($TaskPath).GetTask($TaskName)
+
+# Task Scheduler COM state: 3 = Running, 4 = Ready (i.e. finished/idle)
+$TASK_STATE_RUNNING = 4
+
+$args = New-Object 'System.String[]' 1
+$args[0] = $Version
+
+Write-Host "Triggering task '$TaskName' with Version=$Version ..."
+$task.Run($args) | Out-Null
+
+# Give the scheduler a moment to actually start the task before polling
+Start-Sleep -Seconds 1
+
+$elapsed = 0
+while ($task.State -eq $TASK_STATE_RUNNING) {
+    if ($elapsed -ge $TimeoutSeconds) {
+        Write-Error "Task '$TaskName' did not finish within $TimeoutSeconds seconds."
+        exit 1
+    }
+    Start-Sleep -Seconds $PollIntervalSeconds
+    $elapsed += $PollIntervalSeconds
+}
+
+$result = $task.LastTaskResult
+
+if ($result -eq 0) {
+    Write-Host "Task '$TaskName' completed successfully (Version=$Version)."
+    exit 0
+} else {
+    # LastTaskResult is an HRESULT-style code; print it in hex for easier lookup
+    $hex = "0x{0:X8}" -f $result
+    Write-Error "Task '$TaskName' failed. LastTaskResult=$result ($hex)."
+    exit 1
+}
