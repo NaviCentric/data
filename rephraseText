@@ -1,5 +1,14 @@
-ust to provide some additional context, we noticed that the token limits have been reduced significantly.
+$action = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument '-NoProfile -ExecutionPolicy Bypass -File "D:\Jenkins\tasks\stsinstall.ps1" -Version "$(Arg0)"'
 
-We've been using Codex not only for our regular scripting work but also to analyze the OpenAPI specification and identify the appropriate API endpoints for automation scenarios. Since the API specification is quite large, endpoint discovery consumes a significant number of tokens.
+$principal = New-ScheduledTaskPrincipal `
+    -UserId "SYSTEM" `
+    -LogonType ServiceAccount `
+    -RunLevel Highest
 
-In addition, we had planned to leverage Codex to build AI agents to accelerate our automation efforts. Both endpoint discovery and AI agent development are token-intensive activities, and we're concerned that the current limits may not be sufficient to last through the end of the month.
+Register-ScheduledTask `
+    -TaskName "stsinstall" `
+    -TaskPath "\Jenkins\tasks\" `
+    -Action $action `
+    -Principal $principal
