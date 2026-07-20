@@ -1,14 +1,24 @@
-$action = New-ScheduledTaskAction `
-    -Execute "powershell.exe" `
-    -Argument '-NoProfile -ExecutionPolicy Bypass -File "D:\Jenkins\tasks\stsinstall.ps1" -Version "$(Arg0)"'
+const isCI = !!process.env['CI'];
 
-$principal = New-ScheduledTaskPrincipal `
-    -UserId "SYSTEM" `
-    -LogonType ServiceAccount `
-    -RunLevel Highest
-
-Register-ScheduledTask `
-    -TaskName "stsinstall" `
-    -TaskPath "\Jenkins\tasks\" `
-    -Action $action `
-    -Principal $principal
+// ... in the chromium project:
+name: 'chromium',
+testMatch: /.*[\\/]ves2[\\/]ui[\\/].*\.spec\.ts/,
+use: {
+  ...(isCI
+    ? {
+        ...devices['Desktop Chrome'],
+        viewport: browserScreen,
+      }
+    : {
+        browserName: 'chromium',
+        // channel: 'chrome',
+        viewport: null,
+      }),
+  launchOptions: {
+    args: [
+      '--start-maximized',
+      ...(isCI ? [`--window-size=${browserScreen.width},${browserScreen.height}`] : []),
+    ],
+  },
+  storageState: 'playwright/.auth/ves2-user.json',
+}
