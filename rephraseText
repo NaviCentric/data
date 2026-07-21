@@ -1,24 +1,22 @@
-const isCI = !!process.env['CI'];
+$TaskPath = "\Jenkins\tasks\"
+$TaskName = "stsinstall"
+$User = "OSKGLOBAL\CORSVDJENP001"
 
-// ... in the chromium project:
-name: 'chromium',
-testMatch: /.*[\\/]ves2[\\/]ui[\\/].*\.spec\.ts/,
-use: {
-  ...(isCI
-    ? {
-        ...devices['Desktop Chrome'],
-        viewport: browserScreen,
-      }
-    : {
-        browserName: 'chromium',
-        // channel: 'chrome',
-        viewport: null,
-      }),
-  launchOptions: {
-    args: [
-      '--start-maximized',
-      ...(isCI ? [`--window-size=${browserScreen.width},${browserScreen.height}`] : []),
-    ],
-  },
-  storageState: 'playwright/.auth/ves2-user.json',
+$account = New-Object System.Security.Principal.NTAccount($User)
+$sid = $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
+
+$service = New-Object -ComObject "Schedule.Service"
+$service.Connect()
+
+$task = $service.GetFolder($TaskPath).GetTask($TaskName)
+
+$sddl = $task.GetSecurityDescriptor(0xF)
+
+Write-Host "SID for $User : $sid"
+Write-Host "Current SDDL: $sddl"
+
+if ($sddl -like "*$sid*") {
+    Write-Host "Already granted — this SID is present in the security descriptor." -ForegroundColor Green
+} else {
+    Write-Host "NOT present yet — permissions script still needs to be run." -ForegroundColor Yellow
 }
