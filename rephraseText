@@ -1,22 +1,12 @@
-$TaskPath = "\Jenkins\tasks\"
-$TaskName = "stsinstall"
-$User = "OSKGLOBAL\CORSVDJENP001"
-
-$account = New-Object System.Security.Principal.NTAccount($User)
-$sid = $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
-
-$service = New-Object -ComObject "Schedule.Service"
-$service.Connect()
-
-$task = $service.GetFolder($TaskPath).GetTask($TaskName)
-
-$sddl = $task.GetSecurityDescriptor(0xF)
-
-Write-Host "SID for $User : $sid"
-Write-Host "Current SDDL: $sddl"
-
-if ($sddl -like "*$sid*") {
-    Write-Host "Already granted — this SID is present in the security descriptor." -ForegroundColor Green
-} else {
-    Write-Host "NOT present yet — permissions script still needs to be run." -ForegroundColor Yellow
+stage('Install STS Desktop') {
+    when {
+        expression {
+            return params.SETUP_STS_DESKTOP && env.STS_DESKTOP_SETUP_REQUIRED == 'true'
+        }
+    }
+    steps {
+        powershell '''
+            & "D:\\Jenkins\\tasks\\run-sts-install.ps1" -Version "$env:STS_DESKTOP_VERSION"
+        '''
+    }
 }
