@@ -1,12 +1,1 @@
-stage('Install STS Desktop') {
-    when {
-        expression {
-            return params.SETUP_STS_DESKTOP && env.STS_DESKTOP_SETUP_REQUIRED == 'true'
-        }
-    }
-    steps {
-        powershell '''
-            & "D:\\Jenkins\\tasks\\run-sts-install.ps1" -Version "$env:STS_DESKTOP_VERSION"
-        '''
-    }
-}
+One solution which is coming to my mind is: since it's working locally with a manually-started JNLP agent, we could configure auto-logon for the service account on the CI box and launch the agent as a Scheduled Task tied to that logon session (instead of running it as a Windows Service) — so it runs in a real interactive session rather than Session 0
