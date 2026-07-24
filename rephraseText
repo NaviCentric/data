@@ -1,74 +1,46 @@
 /**
- * Component Factory
- * Single composition root for tests.
- *
- * Tests receive one `components` object and access:
- *   components.ui
- *   components.api
- *   components.db
- *   components.desktop
+ * Components fixture
+ * Provides execution components only (UI/API/Desktop/DB adapters via factory).
  */
 
+import { expect, test as base } from '../../core/infrastructure/index';
 import type { APIRequestContext, Page } from '@playwright/test';
-import { UiFactory, type UiComponents } from './UiFactory';
-import { ApiFactory, type ApiComponents } from './ApiFactory';
-import { DbFactory, type DbComponents } from './DbFactory';
-import { DesktopFactory, type DesktopComponents } from './DesktopFactory';
-import { DesktopDriver } from '../desktop/sts/DesktopDriver';
+import { ComponentFactory, type ComponentSuite } from '../../components/factory/index';
+import { config } from '../../core/config/index';
 
-export interface ComponentSuite {
-  ui: UiComponents;
-  api: ApiComponents;
-  db: DbComponents;
-  desktop: DesktopComponents;
+export interface ComponentsFixture {
+  components: ComponentSuite;
 }
 
-export class ComponentFactory {
-  constructor(
-    private readonly page: Page | undefined,
-    private readonly request: APIRequestContext
-  ) {}
+export const componentsFixturesWithPage = {
+  components: async (
+    { page, request }: { page: Page; request: APIRequestContext },
+    use: (value: ComponentSuite) => Promise<void>,
+    testInfo: { project: { name: string } }
+  ): Promise<void> => {
+    const factory = new ComponentFactory(page, request);
+    await use(factory.createLazy());
 
-  create(driver?: DesktopDriver): ComponentSuite {
-    if (!this.page) {
-      throw new Error('UI components require a Playwright page. Use a page-enabled fixture.');
+    if (testInfo.project.name === 'chromium') {
+      // eslint-disable-next-line playwright/no-wait-for-timeout
+      await page.waitForTimeout(config.testing.chromiumTestEndDelayMs);
     }
+  },
+};
 
-    return {
-      ui: new UiFactory(this.page).create(),
-      api: new ApiFactory(this.request).create(),
-      db: new DbFactory().create(),
-      desktop: new DesktopFactory().create(driver),
-    };
-  }
+export const componentsFixturesNoPage = {
+  components: async (
+    { request }: { request: APIRequestContext },
+    use: (value: ComponentSuite) => Promise<void>
+  ): Promise<void> => {
+    const factory = new ComponentFactory(undefined, request);
+    await use(factory.createLazy());
+  },
+};
 
-  createLazy(driver?: DesktopDriver): ComponentSuite {
-    const { page, request } = this;
-    let ui: UiComponents | undefined;
-    let api: ApiComponents | undefined;
-    let db: DbComponents | undefined;
-    let desktop: DesktopComponents | undefined;
+export const componentsFixtures = componentsFixturesWithPage;
 
-    return {
-      get ui(): UiComponents {
-        if (!page) {
-          throw new Error('UI components require a Playwright page. Use a page-enabled fixture.');
-        }
-        ui ??= new UiFactory(page).create();
-        return ui;
-      },
-      get api(): ApiComponents {
-        api ??= new ApiFactory(request).create();
-        return api;
-      },
-      get db(): DbComponents {
-        db ??= new DbFactory().create();
-        return db;
-      },
-      get desktop(): DesktopComponents {
-        desktop ??= new DesktopFactory().create(driver);
-        return desktop;
-      },
-    };
-  }
-}
+export const componentsTest = base.extend<ComponentsFixture>(componentsFixturesWithPage);
+export const componentsNoPageTest = base.extend<ComponentsFixture>(componentsFixturesNoPage);
+
+export { expect };
