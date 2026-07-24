@@ -1,213 +1,255 @@
-/**
- * Data provider fixture
- * Provides data access utilities and DB connectivity.
- */
-
 import { test as base } from '../../core/infrastructure/index';
-import type { APIRequestContext, Page } from '@playwright/test';
-import {
-  DataPrerequisiteValidator,
-  DataSeekService,
-  ScenarioDataProvider,
-  TestDataFactory,
-} from '../../data-management/index';
-import { DatabaseRepository } from '../../components/database/index';
-import type { ComponentSuite } from '../../components/factory/index';
-import {
-  componentsFixturesNoPage,
-  componentsFixturesWithPage,
-  type ComponentsFixture,
-} from './components.fixture';
+import type { APIRequestContext, TestInfo } from '@playwright/test';
+import { DesktopDriver, type DesktopWindow } from '../../components/desktop/sts/index';
+import { ComponentFactory, type ComponentSuite } from '../../components/factory/index';
+import { logger } from '../../core/logger/index';
+import { config as frameworkConfig } from '../../core/config/index';
+import { deleteToken } from '../../core/utils/file-util';
+import { stsTimeoutConstants as stsWait } from '../../core/utils/wait-util';
+import type { ScenarioDataProvider } from '../../data-management/index';
+import type { ComponentsFixture } from './components.fixture';
+import { dataProviderFixturesNoPage, type DataProviderFixture } from './dataprovider.fixture';
 
-export interface TestDataProvider {
-  testDataFactory: TestDataFactory;
-  dataSeekService: DataSeekService;
-  scenarioData: ScenarioDataProvider;
+const STS_EXE_PATH = frameworkConfig.sts.appPath;
+const STS_SCREENSHOT_ALWAYS_ON = frameworkConfig.sts.screenshotAlwaysOn;
+const STS_SCREENSHOT_ON_FAILURE = frameworkConfig.sts.screenshotOnFailure;
+const STS_DELETE_TOKEN = frameworkConfig.sts.deleteToken;
+const STS_LAUNCH_RETRY_COUNT = 3;
+const stsProjectTestCaseIdFixture: [string, { option: true }] = ['', { option: true }];
+
+/** Runtime context returned after launching the STS desktop application. */
+export interface StsLaunchContext {
+  /** Desktop driver backed by FlaUI for STS automation. */
+  driver: DesktopDriver;
+  /** Main window handle for the STS application. */
+  window: DesktopWindow;
+  /** STS process id returned by FlaUI. */
+  processId?: number;
 }
 
-export interface DataProviderFixture {
-  dataProvider: TestDataProvider;
-  scenarioData: ScenarioDataProvider;
-  testDataFactory: TestDataFactory;
-  dataSeekService: DataSeekService;
-  prerequisiteValidator: DataPrerequisiteValidator;
-  database: DatabaseRepository;
+/** Fixture that provides a launched STS desktop application. */
+export interface StsLaunchFixture {
+  stsLaunch: StsLaunchContext;
 }
 
-export const dataProviderFixturesWithPage = {
-  dataProvider: async (
-    {
-      page,
-      request,
-      components,
-    }: { page: Page; request: APIRequestContext; components: ComponentSuite },
-    use: (value: TestDataProvider) => Promise<void>
+/** Fixture that provides an authenticated STS main screen session. */
+export interface StsMainScreenFixture {
+  stsMainScreen: StsLaunchContext;
+}
+
+/** Runtime context returned after selecting an STS project. */
+export interface StsProjectSelectedContext extends StsLaunchContext {
+  /** The project name resolved from the test's scenario data. */
+  projectName: string;
+  /** The project name confirmed as selected in the STS main window. */
+  selectedProject: string;
+}
+
+/** Fixture that provides an STS session with a selected project. */
+export interface StsProjectSelectedFixture {
+  stsProjectSelected: StsProjectSelectedContext;
+}
+
+/** Options used by STS project selection fixtures. */
+export interface StsProjectSelectedOptions {
+  stsProjectTestCaseId: string;
+}
+
+/** Complete STS fixture set used by STS desktop tests. */
+export type StsFixture = ComponentsFixture &
+  DataProviderFixture &
+  StsLaunchFixture &
+  StsMainScreenFixture &
+  StsProjectSelectedFixture &
+  StsProjectSelectedOptions;
+
+/** Launches STS through FlaUI and tears it down after the test. */
+export const stsLaunchFixtures = {
+  stsLaunch: async (
+    {},
+    use: (value: StsLaunchContext) => Promise<void>,
+    testInfo: TestInfo
   ): Promise<void> => {
-    const testDataFactory = new TestDataFactory(request, page, components);
-    const dataSeekService = new DataSeekService(request, page, components);
-    const scenarioData = new ScenarioDataProvider(request, page, components);
+    const driver = new DesktopDriver();
 
-    const dataProvider: TestDataProvider = {
-      testDataFactory,
-      dataSeekService,
-      scenarioData,
-    };
+    try {
+      if (STS_DELETE_TOKEN) {
+        logger.info('Deleting STS authentication token before launch');
+        deleteToken();
+      }
 
-    await use(dataProvider);
-    await scenarioData.cleanupAll();
-  },
+      testInfo.annotations.push({
+        type: 'sts-app-launch-timeout',
+        description: `${(stsWait.APP_LAUNCH_TIMEOUT / 1000).toFixed(2)}s`,
+      });
+      logger.debug(`STS app launch timeout: ${(stsWait.APP_LAUNCH_TIMEOUT / 1000).toFixed(2)}s`);
+      await driver.launch({
+        applicationPath: STS_EXE_PATH,
+        automationType: 'uia2',
+        retryCount: STS_LAUNCH_RETRY_COUNT,
+        retryDelayMs: stsWait.VERY_SHORT_TIMEOUT,
+        windowWaitTimeoutMs: stsWait.APP_LAUNCH_TIMEOUT,
+        pollIntervalMs: stsWait.POLL_INTERVAL,
+      });
 
-  scenarioData: async (
-    {
-      page,
-      request,
-      components,
-    }: { page: Page; request: APIRequestContext; components: ComponentSuite },
-    use: (value: ScenarioDataProvider) => Promise<void>
-  ): Promise<void> => {
-    const provider = new ScenarioDataProvider(request, page, components);
-    await use(provider);
-    await provider.cleanupAll();
-  },
+      const window = driver.getWindow();
+      if (!window) {
+        throw new Error('STS fixture: FlaUI did not return a Sim Tool Suite main window.');
+      }
 
-  testDataFactory: async (
-    {
-      page,
-      request,
-      components,
-    }: { page: Page; request: APIRequestContext; components: ComponentSuite },
-    use: (value: TestDataFactory) => Promise<void>
-  ): Promise<void> => {
-    const factory = new TestDataFactory(request, page, components);
-    await use(factory);
-  },
+      await use({
+        driver,
+        window,
+        processId: driver.getProcessId(),
+      });
+    } finally {
+      const hasTestFailed = testInfo.status !== testInfo.expectedStatus;
+      const captureScreenshot =
+        STS_SCREENSHOT_ALWAYS_ON || (STS_SCREENSHOT_ON_FAILURE && hasTestFailed);
+      logger.info(
+        `stsLaunch fixture teardown: status=${testInfo.status}, expectedStatus=${testInfo.expectedStatus}, ` +
+          `STS_SCREENSHOT_ALWAYS_ON=${STS_SCREENSHOT_ALWAYS_ON}, STS_SCREENSHOT_ON_FAILURE=${STS_SCREENSHOT_ON_FAILURE}, ` +
+          `captureScreenshot=${captureScreenshot}`
+      );
+      if (captureScreenshot) {
+        try {
+          const screenshot = await driver.captureWindowPng();
+          if (screenshot) {
+            await testInfo.attach('sts-screenshot', {
+              body: screenshot,
+              contentType: 'image/png',
+            });
+          }
+        } catch {
+          // Ignore screenshot errors so teardown can continue.
+        }
+      }
 
-  dataSeekService: async (
-    {
-      page,
-      request,
-      components,
-    }: { page: Page; request: APIRequestContext; components: ComponentSuite },
-    use: (value: DataSeekService) => Promise<void>
-  ): Promise<void> => {
-    const service = new DataSeekService(request, page, components);
-    await use(service);
-  },
-
-  prerequisiteValidator: async (
-    { request }: { request: APIRequestContext },
-    use: (value: DataPrerequisiteValidator) => Promise<void>
-  ): Promise<void> => {
-    void request;
-    const validator = new DataPrerequisiteValidator();
-    await use(validator);
-  },
-
-  database: async (
-    { request }: { request: APIRequestContext },
-    use: (value: DatabaseRepository) => Promise<void>
-  ): Promise<void> => {
-    void request;
-    const db = new DatabaseRepository();
-    const isValid = await db.validateConnection();
-    if (!isValid) {
-      throw new Error('Database connection failed');
+      await driver.close();
+      await new Promise((resolve) => setTimeout(resolve, stsWait.TEARDOWN_WAIT));
     }
-
-    await use(db);
-    await db.closeConnection();
   },
 };
 
-export const dataProviderFixturesNoPage = {
-  dataProvider: async (
+/** Ensures the launched STS application is at the authenticated main screen. */
+export const stsMainScreenFixtures = {
+  stsMainScreen: async (
     {
-      request,
       components,
-    }: { request: APIRequestContext; components: ComponentSuite },
-    use: (value: TestDataProvider) => Promise<void>
+      stsLaunch,
+      config,
+    }: {
+      components: ComponentSuite;
+      stsLaunch: StsLaunchContext;
+      config: typeof frameworkConfig;
+    },
+    use: (value: StsLaunchContext) => Promise<void>
   ): Promise<void> => {
-    const testDataFactory = new TestDataFactory(request, undefined, components);
-    const dataSeekService = new DataSeekService(request, undefined, components);
-    const scenarioData = new ScenarioDataProvider(request, undefined, components);
+    logger.info('Checking STS launch state before authenticated desktop test');
 
-    const dataProvider: TestDataProvider = {
-      testDataFactory,
-      dataSeekService,
-      scenarioData,
-    };
+    if (!(await components.desktop.screens.mainWindow.isLoaded())) {
+      logger.info('STS login screen detected; logging in and waiting for main screen');
 
-    await use(dataProvider);
-    await scenarioData.cleanupAll();
-  },
-
-  scenarioData: async (
-    {
-      request,
-      components,
-    }: { request: APIRequestContext; components: ComponentSuite },
-    use: (value: ScenarioDataProvider) => Promise<void>
-  ): Promise<void> => {
-    const provider = new ScenarioDataProvider(request, undefined, components);
-    await use(provider);
-    await provider.cleanupAll();
-  },
-
-  testDataFactory: async (
-    {
-      request,
-      components,
-    }: { request: APIRequestContext; components: ComponentSuite },
-    use: (value: TestDataFactory) => Promise<void>
-  ): Promise<void> => {
-    const factory = new TestDataFactory(request, undefined, components);
-    await use(factory);
-  },
-
-  dataSeekService: async (
-    {
-      request,
-      components,
-    }: { request: APIRequestContext; components: ComponentSuite },
-    use: (value: DataSeekService) => Promise<void>
-  ): Promise<void> => {
-    const service = new DataSeekService(request, undefined, components);
-    await use(service);
-  },
-
-  prerequisiteValidator: async (
-    { request }: { request: APIRequestContext },
-    use: (value: DataPrerequisiteValidator) => Promise<void>
-  ): Promise<void> => {
-    void request;
-    const validator = new DataPrerequisiteValidator();
-    await use(validator);
-  },
-
-  database: async (
-    { request }: { request: APIRequestContext },
-    use: (value: DatabaseRepository) => Promise<void>
-  ): Promise<void> => {
-    void request;
-    const db = new DatabaseRepository();
-    const isValid = await db.validateConnection();
-    if (!isValid) {
-      throw new Error('Database connection failed');
+      await components.desktop.screens.login.waitForLoad();
+      logger.debug('Restoring and focusing the STS login window before entering credentials.');
+      stsLaunch.driver.restoreAndFocusWindow();
+      await components.desktop.screens.login.login({
+        connectionUrl: config.stsConnectionUrl,
+        organization: config.auth.tenant,
+        userName: config.auth.username,
+        password: config.auth.password,
+      });
+      await components.desktop.screens.mainWindow.waitForLoad();
+      logger.debug('Restoring and focusing the STS main window after login.');
+      stsLaunch.driver.restoreAndFocusWindow();
+    } else {
+      logger.info('STS main screen is already available; skipping login');
+      logger.debug('Restoring and focusing the STS main window after skipped login.');
+      stsLaunch.driver.restoreAndFocusWindow();
     }
 
-    await use(db);
-    await db.closeConnection();
+    await use({
+      driver: stsLaunch.driver,
+      window: stsLaunch.driver.getWindow() ?? stsLaunch.window,
+      processId: stsLaunch.processId,
+    });
   },
 };
 
-export const dataProviderFixtures = dataProviderFixturesWithPage;
+/** Creates the shared component suite using the STS desktop driver. */
+export const componentsFixtures = {
+  components: async (
+    {
+      request,
+      stsLaunch,
+    }: { request: APIRequestContext; stsLaunch: StsLaunchContext },
+    use: (value: ComponentSuite) => Promise<void>
+  ): Promise<void> => {
+    await use(new ComponentFactory(undefined, request).createLazy(stsLaunch.driver));
+  },
+};
 
-export const dataProviderTest = base.extend<ComponentsFixture & DataProviderFixture>({
-  ...componentsFixturesWithPage,
-  ...dataProviderFixturesWithPage,
-});
+/** Option fixtures for STS project selection. */
+export const stsProjectSelectedOptionFixtures = {
+  stsProjectTestCaseId: stsProjectTestCaseIdFixture,
+};
 
-export const dataProviderNoPageTest = base.extend<ComponentsFixture & DataProviderFixture>({
-  ...componentsFixturesNoPage,
+/** Selects the STS project resolved from scenario data. */
+export const stsProjectSelectedFixtures = {
+  stsProjectSelected: async (
+    {
+      components,
+      stsMainScreen,
+      scenarioData,
+      stsProjectTestCaseId,
+    }: {
+      components: ComponentSuite;
+      stsMainScreen: StsLaunchContext;
+      scenarioData: ScenarioDataProvider;
+      stsProjectTestCaseId: string;
+    },
+    use: (value: StsProjectSelectedContext) => Promise<void>
+  ): Promise<void> => {
+    if (!stsProjectTestCaseId) {
+      throw new Error('STS project selection fixture requires stsProjectTestCaseId.');
+    }
+
+    const data = await scenarioData.forTest(stsProjectTestCaseId, { app: 'sts' });
+    const projectName = data.sts.project!.name;
+
+    logger.debug('Restoring and focusing the STS main window before project selection.');
+    stsMainScreen.driver.restoreAndFocusWindow();
+
+    logger.info(`Selecting STS project: ${projectName}`);
+
+    await components.desktop.screens.mainWindow.selectProject(projectName);
+    const selectedProject =
+      await components.desktop.screens.mainWindow.waitForSelectedProject(projectName);
+
+    logger.info(`Selected project: ${selectedProject}`);
+
+    await use({
+      driver: stsMainScreen.driver,
+      window: stsMainScreen.window,
+      processId: stsMainScreen.processId,
+      projectName,
+      selectedProject,
+    });
+  },
+};
+
+/** Combined STS fixture registrations. */
+export const stsFixtures = {
+  ...stsLaunchFixtures,
+  ...componentsFixtures,
   ...dataProviderFixturesNoPage,
-});
+  ...stsMainScreenFixtures,
+  ...stsProjectSelectedOptionFixtures,
+  ...stsProjectSelectedFixtures,
+};
+
+/** Playwright test extended with STS launch fixtures only. */
+export const stsLaunchTest = base.extend<StsLaunchFixture>(stsLaunchFixtures);
+
+/** Playwright test extended with the complete STS fixture set. */
+export const stsTest = base.extend<StsFixture>(stsFixtures);
