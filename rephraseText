@@ -1,63 +1,213 @@
 /**
- * Composed fixtures
- * Combines components + data provider + validators for ergonomic test authoring.
+ * Data provider fixture
+ * Provides data access utilities and DB connectivity.
  */
 
-import { expect, test as base } from '../../core/infrastructure/index';
+import { test as base } from '../../core/infrastructure/index';
+import type { APIRequestContext, Page } from '@playwright/test';
+import {
+  DataPrerequisiteValidator,
+  DataSeekService,
+  ScenarioDataProvider,
+  TestDataFactory,
+} from '../../data-management/index';
+import { DatabaseRepository } from '../../components/database/index';
+import type { ComponentSuite } from '../../components/factory/index';
 import {
   componentsFixturesNoPage,
   componentsFixturesWithPage,
   type ComponentsFixture,
 } from './components.fixture';
-import {
-  dataProviderFixturesNoPage,
-  dataProviderFixturesWithPage,
-  type DataProviderFixture,
-} from './dataprovider.fixture';
-import {
-  stsFixtures,
-  stsMainScreenFixtures,
-  stsProjectSelectedFixtures,
-  type StsFixture,
-  type StsMainScreenFixture,
-  type StsProjectSelectedFixture,
-} from './sts.fixture';
-import { validatorFixtures, type ValidatorFixture } from './validator.fixture';
 
-export type AppComposedFixture = ComponentsFixture & DataProviderFixture & ValidatorFixture;
-export type StsComposedFixture = AppComposedFixture & StsFixture;
+export interface TestDataProvider {
+  testDataFactory: TestDataFactory;
+  dataSeekService: DataSeekService;
+  scenarioData: ScenarioDataProvider;
+}
 
-const appFixtureConfigWithPage = {
+export interface DataProviderFixture {
+  dataProvider: TestDataProvider;
+  scenarioData: ScenarioDataProvider;
+  testDataFactory: TestDataFactory;
+  dataSeekService: DataSeekService;
+  prerequisiteValidator: DataPrerequisiteValidator;
+  database: DatabaseRepository;
+}
+
+export const dataProviderFixturesWithPage = {
+  dataProvider: async (
+    {
+      page,
+      request,
+      components,
+    }: { page: Page; request: APIRequestContext; components: ComponentSuite },
+    use: (value: TestDataProvider) => Promise<void>
+  ): Promise<void> => {
+    const testDataFactory = new TestDataFactory(request, page, components);
+    const dataSeekService = new DataSeekService(request, page, components);
+    const scenarioData = new ScenarioDataProvider(request, page, components);
+
+    const dataProvider: TestDataProvider = {
+      testDataFactory,
+      dataSeekService,
+      scenarioData,
+    };
+
+    await use(dataProvider);
+    await scenarioData.cleanupAll();
+  },
+
+  scenarioData: async (
+    {
+      page,
+      request,
+      components,
+    }: { page: Page; request: APIRequestContext; components: ComponentSuite },
+    use: (value: ScenarioDataProvider) => Promise<void>
+  ): Promise<void> => {
+    const provider = new ScenarioDataProvider(request, page, components);
+    await use(provider);
+    await provider.cleanupAll();
+  },
+
+  testDataFactory: async (
+    {
+      page,
+      request,
+      components,
+    }: { page: Page; request: APIRequestContext; components: ComponentSuite },
+    use: (value: TestDataFactory) => Promise<void>
+  ): Promise<void> => {
+    const factory = new TestDataFactory(request, page, components);
+    await use(factory);
+  },
+
+  dataSeekService: async (
+    {
+      page,
+      request,
+      components,
+    }: { page: Page; request: APIRequestContext; components: ComponentSuite },
+    use: (value: DataSeekService) => Promise<void>
+  ): Promise<void> => {
+    const service = new DataSeekService(request, page, components);
+    await use(service);
+  },
+
+  prerequisiteValidator: async (
+    { request }: { request: APIRequestContext },
+    use: (value: DataPrerequisiteValidator) => Promise<void>
+  ): Promise<void> => {
+    void request;
+    const validator = new DataPrerequisiteValidator();
+    await use(validator);
+  },
+
+  database: async (
+    { request }: { request: APIRequestContext },
+    use: (value: DatabaseRepository) => Promise<void>
+  ): Promise<void> => {
+    void request;
+    const db = new DatabaseRepository();
+    const isValid = await db.validateConnection();
+    if (!isValid) {
+      throw new Error('Database connection failed');
+    }
+
+    await use(db);
+    await db.closeConnection();
+  },
+};
+
+export const dataProviderFixturesNoPage = {
+  dataProvider: async (
+    {
+      request,
+      components,
+    }: { request: APIRequestContext; components: ComponentSuite },
+    use: (value: TestDataProvider) => Promise<void>
+  ): Promise<void> => {
+    const testDataFactory = new TestDataFactory(request, undefined, components);
+    const dataSeekService = new DataSeekService(request, undefined, components);
+    const scenarioData = new ScenarioDataProvider(request, undefined, components);
+
+    const dataProvider: TestDataProvider = {
+      testDataFactory,
+      dataSeekService,
+      scenarioData,
+    };
+
+    await use(dataProvider);
+    await scenarioData.cleanupAll();
+  },
+
+  scenarioData: async (
+    {
+      request,
+      components,
+    }: { request: APIRequestContext; components: ComponentSuite },
+    use: (value: ScenarioDataProvider) => Promise<void>
+  ): Promise<void> => {
+    const provider = new ScenarioDataProvider(request, undefined, components);
+    await use(provider);
+    await provider.cleanupAll();
+  },
+
+  testDataFactory: async (
+    {
+      request,
+      components,
+    }: { request: APIRequestContext; components: ComponentSuite },
+    use: (value: TestDataFactory) => Promise<void>
+  ): Promise<void> => {
+    const factory = new TestDataFactory(request, undefined, components);
+    await use(factory);
+  },
+
+  dataSeekService: async (
+    {
+      request,
+      components,
+    }: { request: APIRequestContext; components: ComponentSuite },
+    use: (value: DataSeekService) => Promise<void>
+  ): Promise<void> => {
+    const service = new DataSeekService(request, undefined, components);
+    await use(service);
+  },
+
+  prerequisiteValidator: async (
+    { request }: { request: APIRequestContext },
+    use: (value: DataPrerequisiteValidator) => Promise<void>
+  ): Promise<void> => {
+    void request;
+    const validator = new DataPrerequisiteValidator();
+    await use(validator);
+  },
+
+  database: async (
+    { request }: { request: APIRequestContext },
+    use: (value: DatabaseRepository) => Promise<void>
+  ): Promise<void> => {
+    void request;
+    const db = new DatabaseRepository();
+    const isValid = await db.validateConnection();
+    if (!isValid) {
+      throw new Error('Database connection failed');
+    }
+
+    await use(db);
+    await db.closeConnection();
+  },
+};
+
+export const dataProviderFixtures = dataProviderFixturesWithPage;
+
+export const dataProviderTest = base.extend<ComponentsFixture & DataProviderFixture>({
   ...componentsFixturesWithPage,
   ...dataProviderFixturesWithPage,
-  ...validatorFixtures,
-};
+});
 
-const appFixtureConfigNoPage = {
+export const dataProviderNoPageTest = base.extend<ComponentsFixture & DataProviderFixture>({
   ...componentsFixturesNoPage,
   ...dataProviderFixturesNoPage,
-  ...validatorFixtures,
-};
-
-const ves2UiAppTest = base.extend<AppComposedFixture>(appFixtureConfigWithPage);
-const ves2NoPageAppTest = base.extend<AppComposedFixture>(appFixtureConfigNoPage);
-
-export const ves2UiTest = ves2UiAppTest;
-export const ves2ApiTest = ves2NoPageAppTest;
-export const ves2DbTest = ves2NoPageAppTest;
-export const ves2Test = ves2UiTest;
-export const stsTest = base.extend<StsComposedFixture>({
-  ...dataProviderFixturesNoPage,
-  ...validatorFixtures,
-  ...stsFixtures,
 });
-
-export const stsMainScreenTest = stsTest.extend<StsMainScreenFixture>({
-  ...stsMainScreenFixtures,
-});
-
-export const stsProjectSelectedTest = stsMainScreenTest.extend<StsProjectSelectedFixture>({
-  ...stsProjectSelectedFixtures,
-});
-
-export { expect };
