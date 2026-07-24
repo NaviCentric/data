@@ -1,1 +1,74 @@
-One solution which is coming to my mind is: since it's working locally with a manually-started JNLP agent, we could configure auto-logon for the service account on the CI box and launch the agent as a Scheduled Task tied to that logon session (instead of running it as a Windows Service) — so it runs in a real interactive session rather than Session 0
+/**
+ * Component Factory
+ * Single composition root for tests.
+ *
+ * Tests receive one `components` object and access:
+ *   components.ui
+ *   components.api
+ *   components.db
+ *   components.desktop
+ */
+
+import type { APIRequestContext, Page } from '@playwright/test';
+import { UiFactory, type UiComponents } from './UiFactory';
+import { ApiFactory, type ApiComponents } from './ApiFactory';
+import { DbFactory, type DbComponents } from './DbFactory';
+import { DesktopFactory, type DesktopComponents } from './DesktopFactory';
+import { DesktopDriver } from '../desktop/sts/DesktopDriver';
+
+export interface ComponentSuite {
+  ui: UiComponents;
+  api: ApiComponents;
+  db: DbComponents;
+  desktop: DesktopComponents;
+}
+
+export class ComponentFactory {
+  constructor(
+    private readonly page: Page | undefined,
+    private readonly request: APIRequestContext
+  ) {}
+
+  create(driver?: DesktopDriver): ComponentSuite {
+    if (!this.page) {
+      throw new Error('UI components require a Playwright page. Use a page-enabled fixture.');
+    }
+
+    return {
+      ui: new UiFactory(this.page).create(),
+      api: new ApiFactory(this.request).create(),
+      db: new DbFactory().create(),
+      desktop: new DesktopFactory().create(driver),
+    };
+  }
+
+  createLazy(driver?: DesktopDriver): ComponentSuite {
+    const { page, request } = this;
+    let ui: UiComponents | undefined;
+    let api: ApiComponents | undefined;
+    let db: DbComponents | undefined;
+    let desktop: DesktopComponents | undefined;
+
+    return {
+      get ui(): UiComponents {
+        if (!page) {
+          throw new Error('UI components require a Playwright page. Use a page-enabled fixture.');
+        }
+        ui ??= new UiFactory(page).create();
+        return ui;
+      },
+      get api(): ApiComponents {
+        api ??= new ApiFactory(request).create();
+        return api;
+      },
+      get db(): DbComponents {
+        db ??= new DbFactory().create();
+        return db;
+      },
+      get desktop(): DesktopComponents {
+        desktop ??= new DesktopFactory().create(driver);
+        return desktop;
+      },
+    };
+  }
+}
