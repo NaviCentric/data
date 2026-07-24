@@ -1,46 +1,63 @@
 /**
- * Components fixture
- * Provides execution components only (UI/API/Desktop/DB adapters via factory).
+ * Composed fixtures
+ * Combines components + data provider + validators for ergonomic test authoring.
  */
 
 import { expect, test as base } from '../../core/infrastructure/index';
-import type { APIRequestContext, Page } from '@playwright/test';
-import { ComponentFactory, type ComponentSuite } from '../../components/factory/index';
-import { config } from '../../core/config/index';
+import {
+  componentsFixturesNoPage,
+  componentsFixturesWithPage,
+  type ComponentsFixture,
+} from './components.fixture';
+import {
+  dataProviderFixturesNoPage,
+  dataProviderFixturesWithPage,
+  type DataProviderFixture,
+} from './dataprovider.fixture';
+import {
+  stsFixtures,
+  stsMainScreenFixtures,
+  stsProjectSelectedFixtures,
+  type StsFixture,
+  type StsMainScreenFixture,
+  type StsProjectSelectedFixture,
+} from './sts.fixture';
+import { validatorFixtures, type ValidatorFixture } from './validator.fixture';
 
-export interface ComponentsFixture {
-  components: ComponentSuite;
-}
+export type AppComposedFixture = ComponentsFixture & DataProviderFixture & ValidatorFixture;
+export type StsComposedFixture = AppComposedFixture & StsFixture;
 
-export const componentsFixturesWithPage = {
-  components: async (
-    { page, request }: { page: Page; request: APIRequestContext },
-    use: (value: ComponentSuite) => Promise<void>,
-    testInfo: { project: { name: string } }
-  ): Promise<void> => {
-    const factory = new ComponentFactory(page, request);
-    await use(factory.createLazy());
-
-    if (testInfo.project.name === 'chromium') {
-      // eslint-disable-next-line playwright/no-wait-for-timeout
-      await page.waitForTimeout(config.testing.chromiumTestEndDelayMs);
-    }
-  },
+const appFixtureConfigWithPage = {
+  ...componentsFixturesWithPage,
+  ...dataProviderFixturesWithPage,
+  ...validatorFixtures,
 };
 
-export const componentsFixturesNoPage = {
-  components: async (
-    { request }: { request: APIRequestContext },
-    use: (value: ComponentSuite) => Promise<void>
-  ): Promise<void> => {
-    const factory = new ComponentFactory(undefined, request);
-    await use(factory.createLazy());
-  },
+const appFixtureConfigNoPage = {
+  ...componentsFixturesNoPage,
+  ...dataProviderFixturesNoPage,
+  ...validatorFixtures,
 };
 
-export const componentsFixtures = componentsFixturesWithPage;
+const ves2UiAppTest = base.extend<AppComposedFixture>(appFixtureConfigWithPage);
+const ves2NoPageAppTest = base.extend<AppComposedFixture>(appFixtureConfigNoPage);
 
-export const componentsTest = base.extend<ComponentsFixture>(componentsFixturesWithPage);
-export const componentsNoPageTest = base.extend<ComponentsFixture>(componentsFixturesNoPage);
+export const ves2UiTest = ves2UiAppTest;
+export const ves2ApiTest = ves2NoPageAppTest;
+export const ves2DbTest = ves2NoPageAppTest;
+export const ves2Test = ves2UiTest;
+export const stsTest = base.extend<StsComposedFixture>({
+  ...dataProviderFixturesNoPage,
+  ...validatorFixtures,
+  ...stsFixtures,
+});
+
+export const stsMainScreenTest = stsTest.extend<StsMainScreenFixture>({
+  ...stsMainScreenFixtures,
+});
+
+export const stsProjectSelectedTest = stsMainScreenTest.extend<StsProjectSelectedFixture>({
+  ...stsProjectSelectedFixtures,
+});
 
 export { expect };
