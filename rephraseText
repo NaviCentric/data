@@ -1,63 +1,7 @@
-import js from '@eslint/js';
-import tsParser from '@typescript-eslint/parser';
-import tsPlugin from '@typescript-eslint/eslint-plugin';
-import playwrightPlugin from 'eslint-plugin-playwright';
-import prettierConfig from 'eslint-config-prettier';
-import globals from 'globals';
+Hi Everyone,
 
-export default [
-  // Global ignores (replaces "ignorePatterns")
-  {
-    ignores: ['dist', 'node_modules', 'playwright-report', 'logs'],
-  },
+Just a quick note that tomorrow I'll be starting my workday early at 9:00 AM IST (10:30 PM EST, previous day) and will be logging off early at 6:00 PM IST (7:30 AM EST) due to a personal commitment in the evening.
 
-  // Base recommended rules (replaces "eslint:recommended")
-  js.configs.recommended,
+I'll be available during my working hours and will ensure all planned work is covered.
 
-  // Main TS config (replaces root-level rules in .eslintrc.json)
-  {
-    files: ['**/*.ts'],
-    languageOptions: {
-      parser: tsParser,
-      parserOptions: {
-        ecmaVersion: 2020,
-        sourceType: 'module',
-        project: './tsconfig.eslint.json',
-      },
-      globals: {
-        ...globals.node,
-      },
-    },
-    plugins: {
-      '@typescript-eslint': tsPlugin,
-    },
-    rules: {
-      ...tsPlugin.configs.recommended.rules,
-      '@typescript-eslint/explicit-function-return-type': 'warn',
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': 'error',
-      '@typescript-eslint/no-floating-promises': 'error',
-      '@typescript-eslint/no-misused-promises': 'error',
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
-    },
-  },
-
-  // Playwright override for test files (replaces "overrides" block)
-  {
-    files: ['tests/**/*.ts'],
-    plugins: {
-      playwright: playwrightPlugin,
-    },
-    rules: {
-      ...playwrightPlugin.configs.recommended.rules,
-      'playwright/no-focused-test': 'error',
-      'playwright/no-skipped-test': 'warn',
-      'playwright/no-conditional-expect': 'error',
-      'playwright/no-standalone-expect': 'error',
-      'playwright/expect-expect': 'warn',
-    },
-  },
-
-  // Prettier last, to disable conflicting stylistic rules
-  prettierConfig,
-];
+Thank you!
