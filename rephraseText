@@ -1,1 +1,59 @@
-npm install --save-dev @typescript-eslint/eslint-plugin@^8.65.0 @typescript-eslint/parser@^8.65.0
+import js from '@eslint/js';
+import tsParser from '@typescript-eslint/parser';
+import tsPlugin from '@typescript-eslint/eslint-plugin';
+import playwrightPlugin from 'eslint-plugin-playwright';
+import prettierConfig from 'eslint-config-prettier';
+
+export default [
+  // Global ignores (replaces "ignorePatterns")
+  {
+    ignores: ['dist', 'node_modules', 'playwright-report', 'logs'],
+  },
+
+  // Base recommended rules (replaces "eslint:recommended")
+  js.configs.recommended,
+
+  // Main TS config (replaces root-level rules in .eslintrc.json)
+  {
+    files: ['**/*.ts'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: 2020,
+        sourceType: 'module',
+        project: './tsconfig.eslint.json',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+    },
+    rules: {
+      ...tsPlugin.configs.recommended.rules,
+      '@typescript-eslint/explicit-function-return-type': 'warn',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+    },
+  },
+
+  // Playwright override for test files (replaces "overrides" block)
+  {
+    files: ['tests/**/*.ts'],
+    plugins: {
+      playwright: playwrightPlugin,
+    },
+    rules: {
+      ...playwrightPlugin.configs.recommended.rules,
+      'playwright/no-focused-test': 'error',
+      'playwright/no-skipped-test': 'warn',
+      'playwright/no-conditional-expect': 'error',
+      'playwright/no-standalone-expect': 'error',
+      'playwright/expect-expect': 'warn',
+    },
+  },
+
+  // Prettier last, to disable conflicting stylistic rules
+  prettierConfig,
+];
